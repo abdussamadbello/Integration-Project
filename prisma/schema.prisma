@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  seed     = "prisma/user-seed.ts"
 }
 
 datasource db {
@@ -11,57 +12,55 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
 
-  gAuthCredentials GAuthCredentials?
+  gAuthCredentials      GAuthCredentials?
+  confluenceCredentials confluenceCredentials?
 
   filesHaveAccessTo File[]
-  commentsAuthored CommentAuthor[]
-  
+  commentsAuthored  CommentAuthor[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-
 model GAuthCredentials {
   id     Int  @id @default(autoincrement())
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId Int @unique
+  userId Int  @unique
 
-  googleId String
+  googleId     String
   accessToken  String
   refreshToken String
-  scope String
-  tokenType String
-  expiryDate BigInt
+  scope        String
+  tokenType    String
+  expiryDate   BigInt
 
-  webhookChannelId String?
+  webhookChannelId         String?
   webhookChannelExpiration DateTime?
-  webhookResourceId String?
-  changesPageToken String?
+  webhookResourceId        String?
+  changesPageToken         String?
 
   handle String?
 
   dbCreatedAt DateTime @default(now())
-  dbUpdatedAt DateTime @updatedAt @default(now())
+  dbUpdatedAt DateTime @default(now()) @updatedAt
 }
 
-
 model File {
-  id     Int  @id @default(autoincrement())
+  id                 Int    @id @default(autoincrement())
   usersWhoHaveAccess User[]
 
-  name String
+  name     String
   platform String?
 
   googleDriveFile GoogleDriveFile?
-  comments Comment[] @relation("file")
-
+  comments        Comment[]        @relation("file")
 
   dbCreatedAt DateTime @default(now())
-  dbUpdatedAt DateTime @updatedAt @default(now())
+  dbUpdatedAt DateTime @default(now()) @updatedAt
 
   createdAt DateTime?
   updatedAt DateTime?
@@ -70,48 +69,48 @@ model File {
 model GoogleDriveFile {
   id     Int  @id @default(autoincrement())
   file   File @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  fileId Int @unique
+  fileId Int  @unique
 
   googleId String?
-  name String?
+  name     String?
   mimeType String?
 
   createdAt DateTime?
   updatedAt DateTime?
 
   dbCreatedAt DateTime @default(now())
-  dbUpdatedAt DateTime @updatedAt @default(now())
+  dbUpdatedAt DateTime @default(now()) @updatedAt
 
   @@index([googleId])
 }
 
 model Comment {
   // Sets default to cuid but gets overwritten by the id from middleware
-  id     String  @id @default(cuid())
-  file   File @relation("file", fields: [fileId], references: [id], onDelete: Cascade)
-  fileId Int 
+  id     String @id @default(cuid())
+  file   File   @relation("file", fields: [fileId], references: [id], onDelete: Cascade)
+  fileId Int
 
-  author CommentAuthor @relation(fields: [authorId], references: [id])
+  author   CommentAuthor @relation(fields: [authorId], references: [id])
   authorId Int
 
-  platform String?
+  platform             String?
   // Might not have this until later...
-  platformId String?
+  platformId           String?
   platformDiscussionId String?
-  
+
   content String
 
-  resolved Boolean @default(false)
+  resolved   Boolean   @default(false)
   resolvedAt DateTime?
 
-  done Boolean @default(false)
+  done   Boolean   @default(false)
   doneAt DateTime?
 
   createdAt DateTime?
   updatedAt DateTime?
 
   dbCreatedAt DateTime @default(now())
-  dbUpdatedAt DateTime @updatedAt @default(now())
+  dbUpdatedAt DateTime @default(now()) @updatedAt
 
   @@index([platformId])
   @@index([platformDiscussionId])
@@ -119,18 +118,40 @@ model Comment {
 }
 
 model CommentAuthor {
-  id     Int  @id @default(autoincrement())
+  id       Int       @id @default(autoincrement())
   comments Comment[]
 
-  user User? @relation(fields: [userId], references: [id])
+  user   User? @relation(fields: [userId], references: [id])
   userId Int?
 
-  platformId String?
-  platformName String?
+  platformId    String?
+  platformName  String?
   platformEmail String?
 
   dbCreatedAt DateTime @default(now())
-  dbUpdatedAt DateTime @updatedAt @default(now())
+  dbUpdatedAt DateTime @default(now()) @updatedAt
 
   @@index([userId])
+}
+
+model confluenceCredentials {
+  id     Int  @id @default(autoincrement())
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int  @unique
+
+  accessToken  String
+  refreshToken String
+  scope        String
+  tokenType    String
+  expiryDate   BigInt
+
+  webhookChannelId         String?
+  webhookChannelExpiration DateTime?
+  webhookResourceId        String?
+  changesPageToken         String?
+
+  handle String?
+
+  dbCreatedAt DateTime @default(now())
+  dbUpdatedAt DateTime @default(now()) @updatedAt
 }
