@@ -2,7 +2,6 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { OAuthConfig } from 'config/oauth';
 import crypto from 'crypto';
 import prisma from 'loaders/prisma';
-import { User, File } from '@prisma/client';
 
 type CredentialsData = {
   access_token?: string;
@@ -94,6 +93,17 @@ export const getAuthorizationURL = (): string => {
     'read:confluence-groups',
     'write:confluence-groups',
     'readonly:content.attachment:confluence',
+    'read:content:confluence',
+    'write:content:confluence',
+    'read:content-details:confluence',
+    'read:space-details:confluence',
+    'read:page:confluence',
+    'read:attachment:confluence',
+    'read:custom-content:confluence',
+    'read:comment:confluence',
+    'read:watcher:confluence',
+    'read:user:confluence',
+    'read:space:confluence',
   ];
 
   const scopes = encodeURIComponent(confluenceScopes.join(' '));
@@ -154,7 +164,10 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 const axiosInstance = axios.create({
-  baseURL: process.env.CONFLUENCE_URL,
+  baseURL: process.env.CONFLUENCE_URL + '/714fd049-d7cc-4b07-9862-1f89fb4bfb22',
+  // ideally this should be dynamic from the user accessible resources
+  // https://api.atlassian.com/ex/confluence/{cloudid}/{api}  is the base URL for the API
+  // id can be fetched from the accessible resources https://api.atlassian.com/oauth/token/accessible-resources
   headers: {
     Accept: 'application/json',
   },
@@ -215,13 +228,108 @@ axiosInstance.interceptors.response.use(
   },
 );
 
+export const getAccessibleResources = async (): Promise<any> => {
+  const response = await axios.get(
+    'https://api.atlassian.com/oauth/token/accessible-resources',
+    {
+      headers: {
+        Authorization: `Bearer ${await getDbToken()}`,
+      },
+    },
+  );
+  return response.data;
+};
+
 export const getAllContent = async (): Promise<any> => {
   const response = await axiosInstance.get('/wiki/rest/api/content', {
     params: {
-      cql: 'type=page',
+      cql: 'type=page or type=blogpost',
     },
   });
-  return response.data;
+  return response.data.results;
+};
+
+export const getFiles = async (): Promise<any> => {
+  try {
+    const response = await axiosInstance.get('/wiki/api/v2/attachments');
+    console.log(response.data.results, 'response');
+    const files = response.data.results.map((file: any) => {
+      return {
+        name: file.title,
+        attachmentId: file.id,
+        url: file._links.download,
+        mediaType: file.mediaType,
+        platform: 'confluence',
+      };
+    });
+
+    const savedFiles = [];
+    for (const file of files) {
+      const existingFile = await prisma.confluenceFiles.findUnique({
+        where: { attachmentId: file.attachmentId },
+      });
+
+      if (!existingFile) {
+        const savedFile = await prisma.file.create({
+          data: {
+            name: file.name,
+            platform: file.platform,
+            confluenceFiles: {
+              create: {
+                attachmentId: file.attachmentId,
+                url: file.url,
+                mediaType: file.mediaType,
+                title: file.name,
+              },
+            },
+          },
+        });
+        savedFiles.push(savedFile);
+      }
+    }
+    return savedFiles;
+  } catch (error) {
+    console.log(error, 'error');
+  }
+};
+
+export const getFileComments = async (): Promise<any> => {
+  const files = await prisma.confluenceFiles.findMany({});
+  const comments = [];
+  files.forEach(async (file) => {
+    try {
+      const response = await axiosInstance.get(
+        `/wiki/api/v2/attachments/${file.attachmentId}/footer-comments`,
+      );
+      const commentData = response.data.results[0];
+      let commentExist;
+      if (commentData?.id) {
+        commentExist = await prisma.comment.findFirst({
+          where: {
+            confluenceCommentId: commentData?.id,
+          },
+        });
+      }
+      if (!commentExist && commentData?.id && commentData?.version?.message) {
+        console.log(commentData, 'object');
+        const savedComment = await prisma.comment.create({
+          data: {
+            confluenceCommentId: commentData?.id,
+            content: commentData?.version?.message,
+            file: {
+              connect: {
+                id: file.fileId,
+              },
+            },
+          },
+        });
+        comments.push(response.data.results);
+      }
+    } catch (error) {
+      console.log(error, 'error');
+    }
+  });
+  return comments;
 };
 
 export const getCurrentUser = async (): Promise<any> => {

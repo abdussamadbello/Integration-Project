@@ -57,6 +57,7 @@ model File {
   platform String?
 
   googleDriveFile GoogleDriveFile?
+  confluenceFiles ConfluenceFiles?
   comments        Comment[]        @relation("file")
 
   dbCreatedAt DateTime @default(now())
@@ -84,15 +85,25 @@ model GoogleDriveFile {
   @@index([googleId])
 }
 
+model ConfluenceFiles {
+  id           Int     @id @default(autoincrement())
+  file         File    @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  fileId       Int     @unique
+  attachmentId String? @unique
+  mediaType    String?
+  title        String?
+  url          String?
+}
+
 model Comment {
   // Sets default to cuid but gets overwritten by the id from middleware
   id     String @id @default(cuid())
   file   File   @relation("file", fields: [fileId], references: [id], onDelete: Cascade)
   fileId Int
 
-  author   CommentAuthor @relation(fields: [authorId], references: [id])
-  authorId Int
-
+  author               CommentAuthor? @relation(fields: [authorId], references: [id])
+  authorId             Int
+  confluenceCommentId  String?        @unique
   platform             String?
   // Might not have this until later...
   platformId           String?
